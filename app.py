@@ -7,8 +7,8 @@ from flask import Flask, render_template_string, request, jsonify
 app = Flask(__name__)
 
 # Render-এর Environment Variables থেকে জিমেইল ইনফো নেওয়া হবে
-SENDER_EMAIL = os.environ.get("SENDER_EMAIL")     # আপনার জিমেইল
-SENDER_PASSWORD = os.environ.get("SENDER_PASSWORD") # জিমেইলের ১৬ ডিজিটের App Password
+SENDER_EMAIL = os.environ.get("SENDER_EMAIL")
+SENDER_PASSWORD = os.environ.get("SENDER_PASSWORD")
 
 HTML_TEMPLATE = """
 <!DOCTYPE html>
@@ -62,7 +62,7 @@ HTML_TEMPLATE = """
 
         async function sendMail() {
             const to = document.getElementById('emailTo').value;
-            const subject = document.getElementById('emailSubject').value;
+            const subject = document.getElementById('emailSubject', 'Message from AI Agent').value;
             const body = document.getElementById('emailBody').value;
 
             if(!to || !body) { alert("দয়া করে ইমেইল এবং মেসেজ পূরণ করুন!"); return; }
@@ -102,14 +102,12 @@ def send_email():
         return jsonify({'status': 'error', 'message': 'Environment variables (SENDER_EMAIL / SENDER_PASSWORD) সেট করা নেই!'})
 
     try:
-        # SMTP দিয়ে ইমেইল পাঠানোর কনফিগারেশন
         msg = MIMEMultipart()
         msg['From'] = SENDER_EMAIL
         msg['To'] = to_email
         msg['Subject'] = subject
         msg.attach(MIMEText(body, 'plain'))
 
-        # Gmail SMTP Server কানেকশন (Port 587)
         server = smtplib.SMTP('smtp.gmail.com', 587)
         server.starttls()
         server.login(SENDER_EMAIL, SENDER_PASSWORD)
@@ -118,9 +116,12 @@ def send_email():
 
         return jsonify({'status': 'success'})
     except Exception as e:
-        return jsonify({'status': 'error', 'message': str(e)})
+        error_msg = str(e)
+        # Render-এর লগে আসল এরর প্রিন্ট করবে
+        print(f"❌ SMTP Error Details: {error_msg}")
+        return jsonify({'status': 'error', 'message': error_msg})
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port)
-      
+    
