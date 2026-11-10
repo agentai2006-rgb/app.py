@@ -1,21 +1,16 @@
 import os
-import time
-from threading import Thread
 from flask import Flask, render_template_string
-from flask_socketio import SocketIO
-import MetaTrader5 as mt5
 
 app = Flask(__name__)
-socketio = SocketIO(app, cors_allowed_origins="*")
 
-# Professional ChainX Style Financial & MT5 Trading Dashboard UI
+# ChainX Style Pure Frontend UI (No MT5 Engine yet)
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ChainX - Pro MT5 Trading Dashboard</title>
+    <title>ChainX - Pro Dashboard UI</title>
     <style>
         :root {
             --bg-main: #0b0f17;
@@ -102,16 +97,21 @@ HTML_TEMPLATE = """
         .card-value { font-size: 2.2rem; font-weight: 800; }
         .card-sub { font-size: 0.85rem; color: var(--accent-green); font-weight: 600; }
 
-        /* Bottom Section: Table & AI Box */
+        /* Bottom Section: Analytics & AI Box */
         .bottom-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 24px; }
         @media (max-width: 1024px) { .bottom-grid { grid-template-columns: 1fr; } }
 
-        table { width: 100%; border-collapse: collapse; text-align: left; margin-top: 10px; }
-        th { color: var(--text-muted); font-size: 0.75rem; text-transform: uppercase; padding: 10px 12px; border-bottom: 1px solid var(--card-border); }
-        td { padding: 14px 12px; border-bottom: 1px solid rgba(255,255,255,0.03); font-size: 0.9rem; }
-
-        .pnl-pos { color: var(--accent-green); font-weight: 700; }
-        .pnl-neg { color: var(--accent-red); font-weight: 700; }
+        .chart-placeholder {
+            height: 180px;
+            background: rgba(15, 21, 35, 0.5);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-muted);
+            font-size: 0.9rem;
+            border: 1px dashed rgba(255, 255, 255, 0.1);
+        }
 
         /* AI Robo Advisor Card */
         .ai-card {
@@ -157,7 +157,7 @@ HTML_TEMPLATE = """
                 <div class="ticker-item">NVDA <span>+2.10%</span></div>
             </div>
             <div class="top-right">
-                <div class="balance-pill" id="top-balance">Balance: $0.00</div>
+                <div class="balance-pill">Balance: $25,760.98</div>
             </div>
         </header>
 
@@ -166,43 +166,32 @@ HTML_TEMPLATE = """
             <div class="dashboard-header">
                 <div class="dashboard-title">
                     <h1>Dashboard</h1>
-                    <p>Live update from your MetaTrader 5 terminal ecosystem.</p>
+                    <p>Happy to see you again. Get update of your asset today!</p>
                 </div>
-                <button class="btn-action">Execute Asset</button>
+                <button class="btn-action">Buy Asset</button>
             </div>
 
             <!-- Top Metric Cards -->
             <div class="metrics-grid">
                 <div class="card">
-                    <div class="card-title">Account Equity</div>
-                    <div class="card-value" id="card-equity">$0.00</div>
-                    <div class="card-sub" id="card-profit-sub">Floating P&L: $0.00</div>
+                    <div class="card-title">Total Assets</div>
+                    <div class="card-value">$325,980.65</div>
+                    <div class="card-sub">+12% +$39,117.67 in this year</div>
                 </div>
                 <div class="card">
-                    <div class="card-title">Total Balance</div>
-                    <div class="card-value" id="card-balance">$0.00</div>
-                    <div class="card-sub" style="color: var(--accent-cyan);">MT5 Connected Live</div>
+                    <div class="card-title">Total Investments</div>
+                    <div class="card-value">$270,560.20</div>
+                    <div class="card-sub">+20% +$54,112.04 in this year</div>
                 </div>
             </div>
 
-            <!-- Positions Table & AI Box -->
+            <!-- Chart & AI Box Section -->
             <div class="bottom-grid">
                 <div class="card">
-                    <div class="card-title">Active Market Positions</div>
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Ticket</th>
-                                <th>Symbol</th>
-                                <th>Type</th>
-                                <th>Volume</th>
-                                <th>Profit ($)</th>
-                            </tr>
-                        </thead>
-                        <tbody id="positions-tbody">
-                            <tr><td colspan="5" style="color: var(--text-muted); text-align:center; padding: 20px;">Synchronizing MT5 positions...</td></tr>
-                        </tbody>
-                    </table>
+                    <div class="card-title">Portfolio Performance Overview</div>
+                    <div class="chart-placeholder">
+                        📊 [Interactive Chart Placeholder - Ready for Engine Data]
+                    </div>
                 </div>
 
                 <!-- AI Robo Advisor -->
@@ -210,98 +199,22 @@ HTML_TEMPLATE = """
                     <div>
                         <div class="ai-icon">🤖</div>
                         <h3>Invest Smarter with Our AI-Robo Advisor!</h3>
-                        <p>Get automated risk monitoring, live market insights, and optimized stop-loss calculations.</p>
+                        <p>Get automated management, real-time insights, and personalized advice.</p>
                     </div>
-                    <button class="btn-action">Activate AI Agent</button>
+                    <button class="btn-action">Try Now</button>
                 </div>
             </div>
         </div>
     </div>
-
-    <!-- Socket.IO Client -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
-    <script>
-        const socket = io();
-
-        socket.on('update_data', (data) => {
-            // Update Top Balance & Cards
-            document.getElementById('top-balance').textContent = `Balance: $${data.balance.toFixed(2)}`;
-            document.getElementById('card-balance').textContent = `$${data.balance.toFixed(2)}`;
-            document.getElementById('card-equity').textContent = `$${data.equity.toFixed(2)}`;
-            
-            const subProfit = document.getElementById('card-profit-sub');
-            subProfit.textContent = `Floating P&L: ${data.profit >= 0 ? '+' : ''}$${data.profit.toFixed(2)}`;
-            subProfit.className = `card-sub ${data.profit >= 0 ? 'pnl-pos' : 'pnl-neg'}`;
-
-            // Update Positions Table
-            const tbody = document.getElementById('positions-tbody');
-            tbody.innerHTML = '';
-
-            if (data.positions.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="5" style="color: var(--text-muted); text-align:center; padding: 20px;">No open positions in MT5.</td></tr>`;
-                return;
-            }
-
-            data.positions.forEach(pos => {
-                const row = document.createElement('tr');
-                const isPos = pos.profit >= 0;
-                row.innerHTML = `
-                    <td>${pos.ticket}</td>
-                    <td><strong>${pos.symbol}</strong></td>
-                    <td><span style="color: ${pos.type === 0 ? 'var(--accent-green)' : 'var(--accent-red)'}; font-weight:700;">${pos.type === 0 ? 'BUY' : 'SELL'}</span></td>
-                    <td>${pos.volume}</td>
-                    <td class="${isPos ? 'pnl-pos' : 'pnl-neg'}">${isPos ? '+' : ''}$${pos.profit.toFixed(2)}</td>
-                `;
-                tbody.appendChild(row);
-            });
-        });
-    </script>
 </body>
 </html>
 """
-
-def background_mt5_thread():
-    """Background loop fetching data from local MT5 terminal"""
-    while True:
-        if not mt5.initialize():
-            time.sleep(2)
-            continue
-
-        account_info = mt5.account_info()
-        if account_info is not None:
-            balance = account_info.balance
-            equity = account_info.equity
-            profit = account_info.profit
-
-            positions = mt5.positions_get()
-            positions_list = []
-            if positions is not None:
-                for pos in positions:
-                    positions_list.append({
-                        "ticket": pos.ticket,
-                        "symbol": pos.symbol,
-                        "type": pos.type,
-                        "volume": pos.volume,
-                        "profit": pos.profit
-                    })
-
-            # Broadcast live metrics to website
-            socketio.emit('update_data', {
-                "balance": balance,
-                "equity": equity,
-                "profit": profit,
-                "positions": positions_list
-            })
-
-        time.sleep(1)
 
 @app.route("/")
 def index():
     return render_template_string(HTML_TEMPLATE)
 
 if __name__ == "__main__":
-    t = Thread(target=background_mt5_thread, daemon=True)
-    t.start()
-
     port = int(os.environ.get("PORT", 5000))
-    socketio.run(app, host="0.0.0.0", port=port, debug=True)
+    app.run(host="0.0.0.0", port=port, debug=True)
+    
