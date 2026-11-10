@@ -2,148 +2,219 @@ import os
 import time
 from threading import Thread
 from flask import Flask, render_template_string
-from flask_socketio import SocketIO, emit
+from flask_socketio import SocketIO
 import MetaTrader5 as mt5
 
 app = Flask(__name__)
 socketio = SocketIO(app, cors_allowed_origins="*")
 
-# Professional Dark Theme Dashboard with WebSocket Live Updates
+# Professional ChainX Style Financial & MT5 Trading Dashboard UI
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Live MT5 AI Trading Dashboard</title>
+    <title>ChainX - Pro MT5 Trading Dashboard</title>
     <style>
         :root {
-            --bg-color: #030712;
-            --card-bg: rgba(15, 23, 42, 0.75);
+            --bg-main: #0b0f17;
+            --sidebar-bg: #0f1523;
+            --card-bg: #131b2e;
+            --card-border: rgba(255, 255, 255, 0.06);
+            --accent-purple: #8b5cf6;
             --accent-cyan: #38bdf8;
             --accent-green: #22c55e;
             --accent-red: #ef4444;
             --text-main: #f8fafc;
             --text-muted: #94a3b8;
-            --border-color: rgba(56, 189, 248, 0.2);
-            --glow-shadow: 0 0 25px rgba(56, 189, 248, 0.15);
         }
 
         * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Inter, sans-serif; }
-        body { background-color: var(--bg-color); color: var(--text-main); min-height: 100vh; padding: 20px; }
+        body { background-color: var(--bg-main); color: var(--text-main); display: flex; height: 100vh; overflow: hidden; }
 
-        .container { max-width: 1280px; margin: 0 auto; display: flex; flex-direction: column; gap: 24px; }
-
-        header {
-            background: var(--card-bg);
-            backdrop-filter: blur(16px);
-            border: 1px solid var(--border-color);
-            border-radius: 16px;
-            padding: 18px 28px;
+        /* Sidebar */
+        aside {
+            width: 260px;
+            background-color: var(--sidebar-bg);
+            border-right: 1px solid var(--card-border);
             display: flex;
-            justify-content: space-between;
+            flex-direction: column;
+            padding: 24px 20px;
+            gap: 30px;
+        }
+
+        .logo-area { display: flex; align-items: center; gap: 12px; font-size: 1.3rem; font-weight: 800; }
+        .logo-icon { width: 14px; height: 14px; background: var(--accent-purple); box-shadow: 0 0 12px var(--accent-purple); transform: rotate(45deg); }
+
+        .nav-links { display: flex; flex-direction: column; gap: 8px; }
+        .nav-item {
+            padding: 12px 14px;
+            border-radius: 10px;
+            color: var(--text-muted);
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-decoration: none;
+        }
+        .nav-item:hover, .nav-item.active { background: rgba(139, 92, 246, 0.15); color: var(--accent-purple); }
+
+        /* Main Wrapper */
+        .main-wrapper { flex: 1; display: flex; flex-direction: column; overflow-y: auto; }
+
+        /* Top Bar */
+        .topbar {
+            height: 70px;
+            border-bottom: 1px solid var(--card-border);
+            display: flex;
             align-items: center;
-            box-shadow: var(--glow-shadow);
+            justify-content: space-between;
+            padding: 0 30px;
+            background: var(--bg-main);
+            position: sticky;
+            top: 0;
+            z-index: 100;
         }
 
-        .logo { font-size: 1.4rem; font-weight: 800; letter-spacing: 2px; display: flex; align-items: center; gap: 12px; }
-        .logo-icon { width: 12px; height: 12px; background: var(--accent-cyan); box-shadow: 0 0 12px var(--accent-cyan); transform: rotate(45deg); }
+        .market-ticker { display: flex; gap: 20px; font-size: 0.85rem; color: var(--text-muted); }
+        .ticker-item span { color: var(--accent-green); font-weight: 600; }
 
-        .status-badge {
-            background: rgba(34, 197, 94, 0.15);
-            color: var(--accent-green);
-            border: 1px solid rgba(34, 197, 94, 0.4);
-            padding: 6px 14px;
-            border-radius: 20px;
-            font-size: 0.8rem;
-            font-weight: 700;
-            letter-spacing: 1px;
-        }
+        .top-right { display: flex; align-items: center; gap: 16px; }
+        .balance-pill { background: var(--card-bg); border: 1px solid var(--card-border); padding: 8px 16px; border-radius: 20px; font-weight: 700; color: var(--accent-cyan); }
 
-        /* Stats Grid */
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-            gap: 16px;
-        }
+        /* Dashboard Content */
+        .content { padding: 30px; display: flex; flex-direction: column; gap: 24px; }
 
-        .stat-card {
-            background: var(--card-bg);
-            backdrop-filter: blur(16px);
-            border: 1px solid var(--border-color);
-            border-radius: 14px;
-            padding: 24px;
-            box-shadow: var(--glow-shadow);
-        }
+        .dashboard-header { display: flex; justify-content: space-between; align-items: center; }
+        .dashboard-title h1 { font-size: 1.6rem; font-weight: 800; margin-bottom: 4px; }
+        .dashboard-title p { color: var(--text-muted); font-size: 0.9rem; }
 
-        .stat-title { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1.5px; color: var(--text-muted); margin-bottom: 8px; }
-        .stat-value { font-size: 2.2rem; font-weight: 800; }
+        .btn-action { background: var(--accent-purple); color: #fff; border: none; padding: 10px 20px; border-radius: 10px; font-weight: 700; cursor: pointer; transition: filter 0.2s; }
+        .btn-action:hover { filter: brightness(1.15); }
 
-        /* Panel Layout */
-        .panel {
-            background: var(--card-bg);
-            backdrop-filter: blur(16px);
-            border: 1px solid var(--border-color);
-            border-radius: 16px;
-            padding: 24px;
-        }
+        /* Grid Metrics */
+        .metrics-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+        @media (max-width: 1024px) { .metrics-grid { grid-template-columns: 1fr; } }
 
-        .panel-header { font-size: 1rem; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--accent-cyan); margin-bottom: 16px; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; }
+        .card { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 16px; padding: 24px; display: flex; flex-direction: column; gap: 16px; }
+        .card-title { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); }
+        .card-value { font-size: 2.2rem; font-weight: 800; }
+        .card-sub { font-size: 0.85rem; color: var(--accent-green); font-weight: 600; }
 
-        table { width: 100%; border-collapse: collapse; text-align: left; }
-        th { background: rgba(30, 41, 59, 0.5); color: var(--text-muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; padding: 14px; border-bottom: 1px solid var(--border-color); }
-        td { padding: 16px 14px; border-bottom: 1px solid rgba(255, 255, 255, 0.05); font-size: 0.9rem; }
+        /* Bottom Section: Table & AI Box */
+        .bottom-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 24px; }
+        @media (max-width: 1024px) { .bottom-grid { grid-template-columns: 1fr; } }
+
+        table { width: 100%; border-collapse: collapse; text-align: left; margin-top: 10px; }
+        th { color: var(--text-muted); font-size: 0.75rem; text-transform: uppercase; padding: 10px 12px; border-bottom: 1px solid var(--card-border); }
+        td { padding: 14px 12px; border-bottom: 1px solid rgba(255,255,255,0.03); font-size: 0.9rem; }
 
         .pnl-pos { color: var(--accent-green); font-weight: 700; }
         .pnl-neg { color: var(--accent-red); font-weight: 700; }
-        .empty-text { text-align: center; padding: 30px; color: var(--text-muted); }
+
+        /* AI Robo Advisor Card */
+        .ai-card {
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.15), rgba(56, 189, 248, 0.1));
+            border: 1px solid rgba(139, 92, 246, 0.3);
+            border-radius: 16px;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            text-align: center;
+        }
+        .ai-icon { font-size: 2.5rem; margin-bottom: 10px; }
+        .ai-card h3 { font-size: 1.1rem; font-weight: 700; margin-bottom: 8px; }
+        .ai-card p { color: var(--text-muted); font-size: 0.85rem; margin-bottom: 20px; }
     </style>
 </head>
 <body>
 
-    <div class="container">
-        <header>
-            <div class="logo">
-                <div class="logo-icon"></div>
-                MT5 LIVE TRADING TERMINAL
+    <!-- Sidebar -->
+    <aside>
+        <div class="logo-area">
+            <div class="logo-icon"></div>
+            ChainX
+        </div>
+        <div class="nav-links">
+            <a class="nav-item active">Dashboard</a>
+            <a class="nav-item">Market Summary</a>
+            <a class="nav-item">Portfolio</a>
+            <a class="nav-item">Analytics</a>
+            <a class="nav-item">Wallet</a>
+            <a class="nav-item">Settings</a>
+        </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <div class="main-wrapper">
+        <!-- Top Navigation -->
+        <header class="topbar">
+            <div class="market-ticker">
+                <div class="ticker-item">AAPL <span>+0.45%</span></div>
+                <div class="ticker-item">TSLA <span>+1.20%</span></div>
+                <div class="ticker-item">NVDA <span>+2.10%</span></div>
             </div>
-            <div class="status-badge" id="connection-status">MT5 CONNECTED</div>
+            <div class="top-right">
+                <div class="balance-pill" id="top-balance">Balance: $0.00</div>
+            </div>
         </header>
 
-        <!-- Live Account Metrics -->
-        <div class="stats-grid">
-            <div class="stat-card">
-                <div class="stat-title">Account Balance</div>
-                <div class="stat-value" id="acc-balance">$0.00</div>
+        <!-- Dashboard Body -->
+        <div class="content">
+            <div class="dashboard-header">
+                <div class="dashboard-title">
+                    <h1>Dashboard</h1>
+                    <p>Live update from your MetaTrader 5 terminal ecosystem.</p>
+                </div>
+                <button class="btn-action">Execute Asset</button>
             </div>
-            <div class="stat-card">
-                <div class="stat-title">Account Equity</div>
-                <div class="stat-value" id="acc-equity" style="color: var(--accent-cyan);">$0.00</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-title">Floating Profit / Loss</div>
-                <div class="stat-value" id="acc-profit">$0.00</div>
-            </div>
-        </div>
 
-        <!-- Live Positions Panel -->
-        <div class="panel">
-            <div class="panel-header">Active Market Positions</div>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Ticket</th>
-                        <th>Symbol</th>
-                        <th>Type</th>
-                        <th>Volume</th>
-                        <th>Open Price</th>
-                        <th>Profit ($)</th>
-                    </tr>
-                </thead>
-                <tbody id="positions-table">
-                    <tr><td colspan="6" class="empty-text">Fetching live data from MT5 terminal...</td></tr>
-                </tbody>
-            </table>
+            <!-- Top Metric Cards -->
+            <div class="metrics-grid">
+                <div class="card">
+                    <div class="card-title">Account Equity</div>
+                    <div class="card-value" id="card-equity">$0.00</div>
+                    <div class="card-sub" id="card-profit-sub">Floating P&L: $0.00</div>
+                </div>
+                <div class="card">
+                    <div class="card-title">Total Balance</div>
+                    <div class="card-value" id="card-balance">$0.00</div>
+                    <div class="card-sub" style="color: var(--accent-cyan);">MT5 Connected Live</div>
+                </div>
+            </div>
+
+            <!-- Positions Table & AI Box -->
+            <div class="bottom-grid">
+                <div class="card">
+                    <div class="card-title">Active Market Positions</div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Ticket</th>
+                                <th>Symbol</th>
+                                <th>Type</th>
+                                <th>Volume</th>
+                                <th>Profit ($)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="positions-tbody">
+                            <tr><td colspan="5" style="color: var(--text-muted); text-align:center; padding: 20px;">Synchronizing MT5 positions...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- AI Robo Advisor -->
+                <div class="ai-card">
+                    <div>
+                        <div class="ai-icon">🤖</div>
+                        <h3>Invest Smarter with Our AI-Robo Advisor!</h3>
+                        <p>Get automated risk monitoring, live market insights, and optimized stop-loss calculations.</p>
+                    </div>
+                    <button class="btn-action">Activate AI Agent</button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -153,20 +224,21 @@ HTML_TEMPLATE = """
         const socket = io();
 
         socket.on('update_data', (data) => {
-            // Update Account Info
-            document.getElementById('acc-balance').textContent = `$${data.balance.toFixed(2)}`;
-            document.getElementById('acc-equity').textContent = `$${data.equity.toFixed(2)}`;
+            // Update Top Balance & Cards
+            document.getElementById('top-balance').textContent = `Balance: $${data.balance.toFixed(2)}`;
+            document.getElementById('card-balance').textContent = `$${data.balance.toFixed(2)}`;
+            document.getElementById('card-equity').textContent = `$${data.equity.toFixed(2)}`;
             
-            const profitEl = document.getElementById('acc-profit');
-            profitEl.textContent = `${data.profit >= 0 ? '+' : ''}$${data.profit.toFixed(2)}`;
-            profitEl.className = `stat-value ${data.profit >= 0 ? 'pnl-pos' : 'pnl-neg'}`;
+            const subProfit = document.getElementById('card-profit-sub');
+            subProfit.textContent = `Floating P&L: ${data.profit >= 0 ? '+' : ''}$${data.profit.toFixed(2)}`;
+            subProfit.className = `card-sub ${data.profit >= 0 ? 'pnl-pos' : 'pnl-neg'}`;
 
             // Update Positions Table
-            const tbody = document.getElementById('positions-table');
+            const tbody = document.getElementById('positions-tbody');
             tbody.innerHTML = '';
 
             if (data.positions.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="6" class="empty-text">No active positions open.</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="5" style="color: var(--text-muted); text-align:center; padding: 20px;">No open positions in MT5.</td></tr>`;
                 return;
             }
 
@@ -178,7 +250,6 @@ HTML_TEMPLATE = """
                     <td><strong>${pos.symbol}</strong></td>
                     <td><span style="color: ${pos.type === 0 ? 'var(--accent-green)' : 'var(--accent-red)'}; font-weight:700;">${pos.type === 0 ? 'BUY' : 'SELL'}</span></td>
                     <td>${pos.volume}</td>
-                    <td>${pos.price_open}</td>
                     <td class="${isPos ? 'pnl-pos' : 'pnl-neg'}">${isPos ? '+' : ''}$${pos.profit.toFixed(2)}</td>
                 `;
                 tbody.appendChild(row);
@@ -190,21 +261,18 @@ HTML_TEMPLATE = """
 """
 
 def background_mt5_thread():
-    """Background thread to poll MT5 terminal and push live data via WebSocket"""
+    """Background loop fetching data from local MT5 terminal"""
     while True:
         if not mt5.initialize():
-            print("MT5 initialization failed, retrying...")
             time.sleep(2)
             continue
 
-        # Get Account Info
         account_info = mt5.account_info()
         if account_info is not None:
             balance = account_info.balance
             equity = account_info.equity
             profit = account_info.profit
 
-            # Get Open Positions
             positions = mt5.positions_get()
             positions_list = []
             if positions is not None:
@@ -212,13 +280,12 @@ def background_mt5_thread():
                     positions_list.append({
                         "ticket": pos.ticket,
                         "symbol": pos.symbol,
-                        "type": pos.type, # 0 = Buy, 1 = Sell
+                        "type": pos.type,
                         "volume": pos.volume,
-                        "price_open": pos.price_open,
                         "profit": pos.profit
                     })
 
-            # Broadcast data to all connected web clients
+            # Broadcast live metrics to website
             socketio.emit('update_data', {
                 "balance": balance,
                 "equity": equity,
@@ -226,17 +293,15 @@ def background_mt5_thread():
                 "positions": positions_list
             })
 
-        time.sleep(1) # Refresh rate every 1 second
+        time.sleep(1)
 
 @app.route("/")
 def index():
     return render_template_string(HTML_TEMPLATE)
 
 if __name__ == "__main__":
-    # Start MT5 background poller thread
     t = Thread(target=background_mt5_thread, daemon=True)
     t.start()
 
     port = int(os.environ.get("PORT", 5000))
     socketio.run(app, host="0.0.0.0", port=port, debug=True)
-                        
