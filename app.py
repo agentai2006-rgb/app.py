@@ -1,314 +1,174 @@
-import os
-from flask import Flask, render_template_string
+import uvicorn
+from fastapi import FastAPI
+from fastapi.responses import HTMLResponse
 
-app = Flask(__name__)
+app = FastAPI(title="Quant Desk - 11 Agent System")
 
-HTML_TEMPLATE = """
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ChainX - Financial Dashboard</title>
-    <style>
-        :root {
-            --bg-main: #0b0f17;
-            --sidebar-bg: #0f1523;
-            --card-bg: #131b2e;
-            --card-border: rgba(255, 255, 255, 0.08);
-            --accent-purple: #8b5cf6;
-            --accent-cyan: #38bdf8;
-            --accent-green: #22c55e;
-            --text-main: #f8fafc;
-            --text-muted: #94a3b8;
-        }
+# -------------------------------------------------------------
+# ১. ১১টি AI এজেন্টের সিমুলেটেড প্রসেসিং লজিক
+# -------------------------------------------------------------
+def analyze_market_with_11_agents():
+    # রিয়েল-টাইমে এজেন্টগুলোর বর্তমান সিদ্ধান্ত (সিমুলেশন)
+    agents_status = [
+        {"id": 1, "name": "Trend & Structure Agent", "status": "BULLISH", "color": "text-emerald-400", "desc": "Price above 35 EMA (M15 & H1 aligned)"},
+        {"id": 2, "name": "Volatility & ATR Agent", "status": "OPTIMAL", "color": "text-emerald-400", "desc": "ATR expansion within safety range"},
+        {"id": 3, "name": "Liquidity & FVG Agent", "status": "DETECTED", "color": "text-emerald-400", "desc": "Bullish FVG filled at 4026.50"},
+        {"id": 4, "name": "Momentum & Oscillator", "status": "CROSSOVER", "color": "text-emerald-400", "desc": "Stoch (14,3,3) Golden Cross + RSI > 50"},
+        {"id": 5, "name": "Retail Sentiment Agent", "status": "NEUTRAL", "color": "text-amber-400", "desc": "Retail positioning split (48% Long)"},
+        {"id": 6, "name": "High-Impact News Agent", "status": "CLEAR", "color": "text-emerald-400", "desc": "No Red Folder events next 120 mins"},
+        {"id": 7, "name": "Currency Strength Agent", "status": "STRONG BUY", "color": "text-emerald-400", "desc": "USD Strength Index (+2.4%)"},
+        {"id": 8, "name": "Monte Carlo Engine", "status": "58% WINRATE", "color": "text-emerald-400", "desc": "1000 Simulated paths positive expectancy"},
+        {"id": 9, "name": "Deterministic Risk Guard", "status": "PASS", "color": "text-emerald-400", "desc": "Drawdown < 2%, Spread 1.8 pips"},
+        {"id": 10, "name": "Execution & Slippage", "status": "READY", "color": "text-emerald-400", "desc": "Broker ping 14ms (Optimal)"},
+        {"id": 11, "name": "Master Consensus Gate", "status": "APPROVED (9/11)", "color": "text-emerald-400", "desc": "High Conviction Trade Triggered"}
+    ]
+    return agents_status
 
-        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Inter, sans-serif; }
-        body { background-color: var(--bg-main); color: var(--text-main); display: flex; min-height: 100vh; overflow-x: hidden; }
+# -------------------------------------------------------------
+# ২. ড্যাশবোর্ড ওয়েব ইউআই (HTML + Tailwind CSS Integration)
+# -------------------------------------------------------------
+@app.get("/", response_class=HTMLResponse)
+def dashboard_home():
+    agents = analyze_market_with_11_agents()
+    
+    # এজেন্টের লিস্টকে HTML ডায়নামিক রো (Row) বানিয়ে নেওয়া
+    agents_html = ""
+    for agent in agents:
+        agents_html += f"""
+        <div class="bg-slate-800/70 p-4 rounded-xl border border-slate-700/60 flex flex-col justify-between hover:border-slate-500 transition">
+            <div class="flex justify-between items-start mb-2">
+                <span class="text-xs font-mono text-slate-400">AGENT 0{agent['id']}</span>
+                <span class="text-xs font-bold px-2 py-0.5 rounded bg-slate-900 {agent['color']}">{agent['status']}</span>
+            </div>
+            <h3 class="font-semibold text-slate-100 text-sm">{agent['name']}</h3>
+            <p class="text-xs text-slate-400 mt-2">{agent['desc']}</p>
+        </div>
+        """
 
-        /* Sidebar Styling */
-        aside {
-            width: 260px;
-            min-width: 260px;
-            background-color: var(--sidebar-bg);
-            border-right: 1px solid var(--card-border);
-            display: flex;
-            flex-direction: column;
-            padding: 24px 20px;
-            gap: 24px;
-            justify-content: space-between;
-            height: 100vh;
-            position: sticky;
-            top: 0;
-        }
-
-        .sidebar-top { display: flex; flex-direction: column; gap: 24px; }
-        .logo-area { display: flex; align-items: center; gap: 12px; font-size: 1.4rem; font-weight: 800; color: #fff; }
-        .logo-icon { width: 14px; height: 14px; background: var(--accent-purple); box-shadow: 0 0 12px var(--accent-purple); transform: rotate(45deg); }
-
-        .nav-section { display: flex; flex-direction: column; gap: 4px; }
-        .nav-label { font-size: 0.65rem; text-transform: uppercase; color: #475569; letter-spacing: 1.2px; margin-bottom: 6px; padding-left: 10px; font-weight: 700; }
-        .nav-item {
-            padding: 10px 14px;
-            border-radius: 10px;
-            color: var(--text-muted);
-            font-size: 0.85rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            text-decoration: none;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        .nav-item:hover, .nav-item.active { background: rgba(139, 92, 246, 0.15); color: var(--accent-purple); }
-
-        .sidebar-bottom-card {
-            background: linear-gradient(135deg, rgba(139, 92, 246, 0.15), rgba(15, 21, 35, 0.9));
-            border: 1px solid var(--card-border);
-            border-radius: 14px;
-            padding: 16px;
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-        .sidebar-bottom-card h4 { font-size: 0.9rem; font-weight: 700; color: #fff; }
-        .sidebar-bottom-card p { font-size: 0.75rem; color: var(--text-muted); line-height: 1.3; }
-        .upgrade-btn { background: var(--accent-purple); color: white; border: none; padding: 8px; border-radius: 8px; font-weight: 700; font-size: 0.75rem; cursor: pointer; margin-top: 4px; }
-
-        /* Main Wrapper */
-        .main-wrapper { flex: 1; display: flex; flex-direction: column; min-width: 0; }
-
-        /* Top Bar */
-        .topbar {
-            height: 70px;
-            border-bottom: 1px solid var(--card-border);
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 0 30px;
-            background: var(--bg-main);
-            position: sticky;
-            top: 0;
-            z-index: 100;
-        }
-
-        .market-ticker { display: flex; gap: 20px; font-size: 0.8rem; color: var(--text-muted); align-items: center; overflow-x: auto; }
-        .ticker-item { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
-        .ticker-item span { color: var(--accent-green); font-weight: 600; }
-
-        .top-right { display: flex; align-items: center; gap: 16px; }
-        .balance-pill { background: var(--card-bg); border: 1px solid var(--card-border); padding: 6px 14px; border-radius: 20px; font-weight: 700; color: var(--accent-cyan); font-size: 0.85rem; display: flex; align-items: center; gap: 10px; }
-        .pill-btn { width: 26px; height: 26px; background: var(--accent-purple); border: none; border-radius: 50%; color: white; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; }
-
-        /* Dashboard Content */
-        .content { padding: 30px; display: flex; flex-direction: column; gap: 24px; }
-
-        .dashboard-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; }
-        .dashboard-title h1 { font-size: 1.6rem; font-weight: 800; margin-bottom: 4px; color: #fff; }
-        .dashboard-title p { color: var(--text-muted); font-size: 0.85rem; }
-
-        .header-actions { display: flex; gap: 12px; align-items: center; }
-        .btn-action { background: var(--accent-purple); color: #fff; border: none; padding: 10px 20px; border-radius: 10px; font-weight: 700; font-size: 0.85rem; cursor: pointer; transition: filter 0.2s; white-space: nowrap; }
-        .btn-action:hover { filter: brightness(1.15); }
-        .btn-outline { background: var(--card-bg); border: 1px solid var(--card-border); color: var(--text-main); padding: 10px 16px; border-radius: 10px; font-weight: 600; font-size: 0.85rem; cursor: pointer; }
-
-        /* Grid Layouts */
-        .metrics-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
-        @media (max-width: 1100px) { .metrics-grid { grid-template-columns: 1fr; } }
-
-        .card { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 16px; padding: 24px; display: flex; flex-direction: column; gap: 16px; }
-        .card-title { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); font-weight: 700; }
-        .card-value { font-size: 2.1rem; font-weight: 800; color: #fff; }
+    html_content = f"""
+    <!DOCTYPE html>
+    <html lang="bn">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Quant Desk v2.0 | 11-Agent Execution Engine</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+    </head>
+    <body class="bg-slate-950 text-slate-100 font-sans min-h-screen p-6">
         
-        .progress-bar-container { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
-        .progress-bg { width: 100%; height: 8px; background: #0b0f17; border-radius: 4px; overflow: hidden; display: flex; }
-        .prog-1 { width: 65%; background: var(--accent-purple); }
-        .prog-2 { width: 25%; background: var(--accent-cyan); }
-        .prog-3 { width: 10%; background: var(--accent-green); }
-
-        .distribution-legend { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
-        .legend-item { display: flex; justify-content: space-between; font-size: 0.85rem; color: var(--text-muted); }
-        .legend-item span strong { color: var(--text-main); }
-
-        /* Chart & Graph Mock */
-        .chart-line-mock { width: 100%; height: 110px; background: linear-gradient(to top, rgba(139,92,246,0.05), rgba(139,92,246,0.35)); border-top: 2px solid var(--accent-purple); position: relative; border-radius: 4px; margin-top: 10px; }
-        .chart-labels { display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--text-muted); margin-top: 8px; }
-
-        /* Bottom Section */
-        .bottom-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 24px; }
-        @media (max-width: 1100px) { .bottom-grid { grid-template-columns: 1fr; } }
-
-        .bars-container { display: flex; justify-content: space-between; align-items: flex-end; height: 130px; padding-top: 15px; border-bottom: 1px solid var(--card-border); }
-        .bar-col { display: flex; flex-direction: column; align-items: center; gap: 8px; flex: 1; height: 100%; justify-content: flex-end; }
-        .bar-fill { width: 22px; background: var(--accent-purple); border-radius: 6px 6px 0 0; }
-        .bar-label { font-size: 0.75rem; color: var(--text-muted); padding-bottom: 8px; }
-
-        /* AI Robo Advisor Card */
-        .ai-card {
-            background: linear-gradient(135deg, rgba(139, 92, 246, 0.18), rgba(56, 189, 248, 0.08));
-            border: 1px solid rgba(139, 92, 246, 0.35);
-            border-radius: 16px;
-            padding: 24px;
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-            text-align: center;
-        }
-        .ai-icon { font-size: 2.4rem; margin-bottom: 8px; }
-        .ai-card h3 { font-size: 1.1rem; font-weight: 700; margin-bottom: 6px; color: #fff; }
-        .ai-card p { color: var(--text-muted); font-size: 0.82rem; margin-bottom: 20px; line-height: 1.4; }
-
-        /* Mobile Adjustments */
-        @media (max-width: 768px) {
-            body { flex-direction: column; }
-            aside { width: 100%; height: auto; position: relative; }
-            .topbar { padding: 0 15px; }
-            .content { padding: 15px; }
-        }
-    </style>
-</head>
-<body>
-
-    <!-- Sidebar -->
-    <aside>
-        <div class="sidebar-top">
-            <div class="logo-area">
-                <div class="logo-icon"></div>
-                Chainx
+        <!-- Top Navbar -->
+        <header class="flex flex-col md:flex-row justify-between items-center border-b border-slate-800 pb-4 mb-6 gap-4">
+            <div>
+                <h1 class="text-2xl font-extrabold tracking-tight text-emerald-400 flex items-center gap-2">
+                    ⚡ QUANT DESK <span class="text-xs bg-emerald-950 text-emerald-300 border border-emerald-800 px-2 py-0.5 rounded-full">v2.0 STANDALONE ENGINE</span>
+                </h1>
+                <p class="text-xs text-slate-400 mt-1">Multi-Agent Consensus System & Deterministic Risk Guardrails</p>
             </div>
-            <div class="nav-section">
-                <div class="nav-label">Main Menu</div>
-                <a class="nav-item active">📊 Dashboard</a>
-                <a class="nav-item">📈 Market Summary</a>
-                <a class="nav-item">💼 Portfolio</a>
-                <a class="nav-item">📉 Analytics</a>
-                <a class="nav-item">👛 Wallet</a>
-                <a class="nav-item">🌐 Community</a>
-            </div>
-            <div class="nav-section">
-                <div class="nav-label">Preferences</div>
-                <a class="nav-item">⚙️ Settings</a>
-                <a class="nav-item">💬 Help & Support</a>
-            </div>
-        </div>
-
-        <div class="sidebar-bottom-card">
-            <h4>Upgrade</h4>
-            <p>Unlock all chainx features & tools</p>
-            <button class="upgrade-btn">Go Pro</button>
-        </div>
-    </aside>
-
-    <!-- Main Content Area -->
-    <div class="main-wrapper">
-        <!-- Top Navigation Bar -->
-        <header class="topbar">
-            <div class="market-ticker">
-                <div class="ticker-item">🟢 The market is open</div>
-                <div class="ticker-item">AAPL <span>+0.45%</span></div>
-                <div class="ticker-item">TSLA <span>+1.20%</span></div>
-                <div class="ticker-item">NVDA <span>+2.10%</span></div>
-            </div>
-            <div class="top-right">
-                <div class="balance-pill">
-                    Balance: $25,760.98
-                    <button class="pill-btn">+</button>
-                </div>
+            <div class="flex gap-3">
+                <span class="bg-emerald-900/40 text-emerald-300 px-3 py-1.5 rounded-lg text-xs font-mono border border-emerald-700/60 flex items-center gap-1.5">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> WEB ENGINE: ACTIVE
+                </span>
+                <span class="bg-amber-900/40 text-amber-300 px-3 py-1.5 rounded-lg text-xs font-mono border border-amber-700/60 flex items-center gap-1.5">
+                    <span class="w-2 h-2 rounded-full bg-amber-400"></span> MT4 STANDBY
+                </span>
             </div>
         </header>
 
-        <!-- Dashboard Content Body -->
-        <div class="content">
-            <div class="dashboard-header">
-                <div class="dashboard-title">
-                    <h1>Dashboard</h1>
-                    <p>Happy to see you again. Get update of your asset today!</p>
-                </div>
-                <div class="header-actions">
-                    <button class="btn-outline">All Time ▾</button>
-                    <button class="btn-action">Buy Asset</button>
-                </div>
+        <!-- Top Metrics Bar -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            <div class="bg-slate-900/80 p-4 rounded-xl border border-slate-800">
+                <p class="text-xs text-slate-400">Active Setup & Pair</p>
+                <h2 class="text-xl font-bold text-amber-400 mt-1">XAUUSD (GOLD)</h2>
+                <span class="text-[10px] text-slate-500">Timeframe: M15 / H1 Alignment</span>
             </div>
-
-            <!-- Top Metric Cards (Total Assets & Investments) -->
-            <div class="metrics-grid">
-                <div class="card">
-                    <div class="card-title">Total Assets</div>
-                    <div class="card-value">$325,980.65</div>
-                    <div style="color: var(--accent-green); font-size: 0.85rem; font-weight: 600;">+12% +$39,117.67 in this year</div>
-                    
-                    <div class="progress-bar-container">
-                        <div class="card-title" style="margin-bottom: 2px;">Distribution</div>
-                        <div class="progress-bg">
-                            <div class="prog-1"></div>
-                            <div class="prog-2"></div>
-                            <div class="prog-3"></div>
-                        </div>
-                        <div class="distribution-legend">
-                            <div class="legend-item"><span>🟣 Stocks (65%)</span> <strong>$211,887.42</strong></div>
-                            <div class="legend-item"><span>🔵 Bonds (25%)</span> <strong>$81,495.16</strong></div>
-                            <div class="legend-item"><span>🟢 Mutual Funds (10%)</span> <strong>$32,598.06</strong></div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="card">
-                    <div class="card-title">Total Investments</div>
-                    <div class="card-value">$270,560.20</div>
-                    <div style="color: var(--accent-green); font-size: 0.85rem; font-weight: 600;">+20% +$54,112.04 in this year</div>
-                    
-                    <div>
-                        <div class="chart-line-mock"></div>
-                        <div class="chart-labels">
-                            <span>2018</span><span>2019</span><span>2020</span><span>2021</span><span>2022</span><span>2023</span><span>2024</span>
-                        </div>
-                    </div>
-                </div>
+            <div class="bg-slate-900/80 p-4 rounded-xl border border-slate-800">
+                <p class="text-xs text-slate-400">Consensus Verdict</p>
+                <h2 class="text-xl font-bold text-emerald-400 mt-1">9 / 11 PASS</h2>
+                <span class="text-[10px] text-emerald-500 font-semibold">BUY HIGH CONVICTION</span>
             </div>
-
-            <!-- Bottom Section (Total Profits & AI Robo Advisor) -->
-            <div class="bottom-grid">
-                <div class="card">
-                    <div class="card-title">Total Profits</div>
-                    <div class="card-value" style="font-size: 1.8rem;">$55,420.45</div>
-                    <div style="color: var(--accent-green); font-size: 0.8rem; font-weight: 600;">+7% +$9,879.43 in this year</div>
-
-                    <div class="bars-container">
-                        <div class="bar-col"><div class="bar-fill" style="height: 40%;"></div></div>
-                        <div class="bar-col"><div class="bar-fill" style="height: 60%;"></div></div>
-                        <div class="bar-col"><div class="bar-fill" style="height: 45%;"></div></div>
-                        <div class="bar-col"><div class="bar-fill" style="height: 75%;"></div></div>
-                        <div class="bar-col"><div class="bar-fill" style="height: 90%;"></div></div>
-                        <div class="bar-col"><div class="bar-fill" style="height: 65%;"></div></div>
-                        <div class="bar-col"><div class="bar-fill" style="height: 100%;"></div></div>
-                    </div>
-                    <div class="chart-labels">
-                        <span>2018</span><span>2019</span><span>2020</span><span>2021</span><span>2022</span><span>2023</span><span>2024</span>
-                    </div>
-                </div>
-
-                <!-- AI Robo Advisor -->
-                <div class="ai-card">
-                    <div>
-                        <div class="ai-icon">🤖</div>
-                        <h3>Invest Smarter with Our AI-Robo Advisor!</h3>
-                        <p>Get automated management, real-time insights, and personalized advice.</p>
-                    </div>
-                    <button class="btn-action" style="width: 100%;">Try Now</button>
-                </div>
+            <div class="bg-slate-900/80 p-4 rounded-xl border border-slate-800">
+                <p class="text-xs text-slate-400">Monte Carlo Projection</p>
+                <h2 class="text-xl font-bold text-emerald-400 mt-1">57.8% WR</h2>
+                <span class="text-[10px] text-slate-500">Expectancy: +0.94R</span>
+            </div>
+            <div class="bg-slate-900/80 p-4 rounded-xl border border-slate-800">
+                <p class="text-xs text-slate-400">Risk Gate Verdict</p>
+                <h2 class="text-xl font-bold text-emerald-400 mt-1">PASSED</h2>
+                <span class="text-[10px] text-slate-500">Spread: 1.8 pips | SL: 32 pips</span>
             </div>
         </div>
-    </div>
-</body>
-</html>
-"""
 
-@app.route("/")
-def index():
-    return render_template_string(HTML_TEMPLATE)
+        <!-- Main Body Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            
+            <!-- 11 Agents Matrix Container (Left 2 Columns) -->
+            <div class="lg:col-span-2 bg-slate-900/60 p-5 rounded-2xl border border-slate-800">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-base font-bold text-slate-200 flex items-center gap-2">
+                        🤖 11 AI Quantitative Agents Analysis
+                    </h2>
+                    <span class="text-xs text-slate-400">Auto Refresh: Live</span>
+                </div>
+                
+                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                    {agents_html}
+                </div>
+            </div>
 
+            <!-- Deterministic Risk & Controls (Right Column) -->
+            <div class="space-y-6">
+                
+                <!-- Risk Checklist -->
+                <div class="bg-slate-900/60 p-5 rounded-2xl border border-slate-800">
+                    <h2 class="text-base font-bold text-slate-200 mb-4">🛡️ Risk Gate Checkpoints</h2>
+                    <div class="space-y-3 text-xs">
+                        <div class="flex justify-between items-center p-2 rounded bg-slate-800/40 border border-slate-800">
+                            <span class="text-slate-300">1. Spread Filter (< 2.5 pips)</span>
+                            <span class="text-emerald-400 font-bold bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-800">1.8 pips</span>
+                        </div>
+                        <div class="flex justify-between items-center p-2 rounded bg-slate-800/40 border border-slate-800">
+                            <span class="text-slate-300">2. Red-Folder News Window</span>
+                            <span class="text-emerald-400 font-bold bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-800">CLEAR</span>
+                        </div>
+                        <div class="flex justify-between items-center p-2 rounded bg-slate-800/40 border border-slate-800">
+                            <span class="text-slate-300">3. Max Active Positions</span>
+                            <span class="text-emerald-400 font-bold bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-800">0 / 3 Active</span>
+                        </div>
+                        <div class="flex justify-between items-center p-2 rounded bg-slate-800/40 border border-slate-800">
+                            <span class="text-slate-300">4. Per-Trade Risk (1.0%)</span>
+                            <span class="text-emerald-400 font-bold bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-800">$100.00</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Web Execution Control Panel -->
+                <div class="bg-slate-900/60 p-5 rounded-2xl border border-slate-800">
+                    <h2 class="text-base font-bold text-slate-200 mb-3">🎮 Manual Master Control</h2>
+                    <p class="text-xs text-slate-400 mb-4">Direct execution control override from Web Interface.</p>
+                    
+                    <div class="flex flex-col gap-2">
+                        <button onclick="alert('Force Execution Signal Sent!')" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 rounded-lg text-xs transition shadow-lg shadow-emerald-950">
+                            FORCE BUY EXECUTION
+                        </button>
+                        <button onclick="alert('Emergency Close Command Sent!')" class="w-full bg-red-600 hover:bg-red-500 text-white font-bold py-2.5 rounded-lg text-xs transition shadow-lg shadow-red-950">
+                            EMERGENCY CLOSE ALL
+                        </button>
+                    </div>
+                </div>
+
+            </div>
+
+        </div>
+
+    </body>
+    </html>
+    """
+    return html_content
+
+# -------------------------------------------------------------
+# ৩. সার্ভার স্টার্টআপ ব্লক
+# -------------------------------------------------------------
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port, debug=True)
+    print("🚀 Starting Web Quantitative Engine on http://127.0.0.1:8000")
+    uvicorn.run(app, host="127.0.0.1", port=8000)
     
